@@ -13,6 +13,8 @@
 #include <cmath> // Include for mathematical functions, like sqrt and sin
 #include <string> // Include for using the string class
 #include <mpi.h>
+#include <fstream>
+#include <sstream>
 
 // Constants defining the output image size and anti-aliasing samples
 const int WIDTH = 1920; // Image width in pixels
@@ -112,20 +114,20 @@ int main(int argc, char* argv[]) {
     // int displs[worldSize];
 
     // for (int i = 0; i < worldSize; i++){
-    //     int currStart = i * ySegment;
-    //     int currEnd = (currStart + ySegment) < HEIGHT ? (currStart + ySegment) : HEIGHT;
-    //     send_counts[i] =  (currEnd - currStart) * WIDTH;
-    //     displs[i] = currStart * WIDTH;
+    //     int currStart = i * ySegment * WIDTH;
+    //     int currEnd = (currStart + ySegment) < HEIGHT ? (currStart + ySegment * WIDTH) : HEIGHT * WIDTH;
+    //     send_counts[i] =  (currEnd - currStart);
+    //     displs[i] = currStart;
     //     if (worldRank == 0) {
     //         std::cout << "send counts at " << i << " is " << send_counts[i] << std::endl;
     //         std::cout << "displs at " << i << " is " << displs[i] << std::endl;
     //     }
     // }
-    // send
+    // // send
 
-    // // MPI_Gatherv(&red[startY], (endY - startY) * WIDTH, MPI_INT, &red[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
-    // // MPI_Gatherv(&green[startY], (endY - startY) * WIDTH, MPI_INT, &green[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
-    // // MPI_Gatherv(&blue[startY], (endY - startY) * WIDTH, MPI_INT, &blue[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Gatherv(&red[startY], (endY - startY) * WIDTH, MPI_INT, &red[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Gatherv(&green[startY], (endY - startY) * WIDTH, MPI_INT, &green[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
+    // MPI_Gatherv(&blue[startY], (endY - startY) * WIDTH, MPI_INT, &blue[0], send_counts, displs, MPI_INT, 0, MPI_COMM_WORLD);
 
     // MPI_Gather(&red[startY], (endY - startY) * WIDTH, MPI_INT, &red[0], ySegment * WIDTH, MPI_INT, 0, MPI_COMM_WORLD);
     // std::cout << "Calculation done at world rank "<< worldRank << std::endl;
@@ -192,15 +194,21 @@ int main(int argc, char* argv[]) {
     if (worldRank == 0)
     {    
         std::ofstream imageFile(filename);
-        // Write the PNM file header
-        imageFile << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
-        // Write the pixel data
+        std::ostringstream oss;
+
+        // Write the PNM file header to the buffer
+        oss << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
+
+        // Write the pixel data to the buffer
         for (int y = 0; y < HEIGHT; ++y) {
             for (int x = 0; x < WIDTH; ++x) {
                 int idx = y * WIDTH + x;
-                imageFile << red[idx] << " " << green[idx] << " " << blue[idx] << "\n";
+                oss << red[idx] << " " << green[idx] << " " << blue[idx] << "\n";
             }
         }
+
+        // Write the buffered data to the file in one go
+        imageFile << oss.str();
         // Close the file
         imageFile.close();
     }
