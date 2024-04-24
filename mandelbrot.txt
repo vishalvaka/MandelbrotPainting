@@ -1,0 +1,25 @@
+The code is parallelized using MPI for distributed parallelization and OpenMP for shared memory parallelization.
+
+The distribution of the image among the nodes was done using static blocking method, where the rows of pixels in the image are statically divided among all nodes.
+OpenMP is used to further divide the given rows among the processors available per node.
+After the final computations are done and the local copies of the red, green and blue arrays are updated for each process, MPI_send is called for every process other than root,
+and MPI_Recv is called in the root process to recieve the image. This could also be done by using MPI_Gatherv, but as tested, there was not much of a difference in speedup. 
+Finally only the root process writes the red, green and blue arrays to the imagefile, and the time taken for all this is printed by the root process.
+
+Below are the times taken in seconds by different node configurations in seconds. Each node has 8 processes requested per node.
+
+1 node: 12.9433s
+2 nodes: 7.40265s
+4 nodes: 5.78687s
+8 nodes: 3.45724s
+
+The individual speedups are:
+
+1 node: 50.41295496511709
+2 nodes: 88.14546142259866
+4 nodes: 112.75698261754626
+8 nodes1: 188.73725862248497
+
+There is a clear increasing trend in the speedup as the number of nodes increases. This shows that the code is scaling well with the number of processors.
+
+The overall average speedup is 110.01316440693674x
