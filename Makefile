@@ -11,7 +11,7 @@ SERIAL_SRC=mandelbrot-serial.cc
 MPI_SRC=mandelbrot-mpi.cc
 
 # Compiler flags
-CFLAGS=-O3 -march=native
+CFLAGS=-O3 -march=native -fopenmp
 MPIFLAGS=$(CFLAGS)
 
 # Default target executed when no arguments are given to make.

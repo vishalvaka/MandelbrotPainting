@@ -15,6 +15,7 @@
 #include <mpi.h>
 #include <fstream>
 #include <sstream>
+#include <omp.h>
 
 // Constants defining the output image size and anti-aliasing samples
 const int WIDTH = 1920; // Image width in pixels
@@ -68,6 +69,8 @@ int main(int argc, char* argv[]) {
     // endX = (startX + xSegment) < WIDTH ? (startX + xSegment) : WIDTH;
     double startTime = MPI_Wtime();
     // Generate the image
+    
+    #pragma omp parallel for
     for (int y = startY; y < endY; ++y) {
         for (int x = 0; x < WIDTH; ++x) {
             // Variables to accumulate color values for anti-aliasing
