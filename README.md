@@ -1,43 +1,83 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/YE0-mhWj)
-# Distributed Painting with MPI
-#### A Mandelbrot Set Parallelization Project
+# Distributed Mandelbrot Painting with MPI and OpenMP
+
+![GitHub Classroom Deadline](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)
 
 ## Overview
-This project involves implementing a parallel version of the Mandelbrot set generation using MPI, focusing on efficiently leveraging multiple nodes to achieve significant performance improvements. It aims to explore how various node counts affect the computation speed and overall efficiency in a distributed computing environment.
+This project explores hybrid parallelisation (MPI + OpenMP) of Mandelbrot-set rendering.  By distributing rows of the output image across multiple MPI ranks (inter-node parallelism) and further splitting each rank's work among CPU threads (intra-node parallelism), we achieve substantial speed-ups compared with a purely serial implementation.
 
-**Background:** The Mandelbrot set is a complex and visually striking fractal that emerges from a simple iterative process applied to the numbers in the complex plane. The challenge lies in calculating whether each point on the plane belongs to the Mandelbrot set within a predetermined number of iterations.
+The code generates a portable-anymap (`.pnm`) image which can be loss-lessly converted to PNG for viewing.
 
-## Objectives
-- **Parallelize the Serial Code**: Transform the provided serial code into a parallelized version utilizing MPI, focusing on effectively distributing the computation workload across multiple nodes.
-- **Node-based Performance Scaling**: Examine how performance scales when utilizing 1, 2, 4, and 8 nodes, with a constant iteration count of 10,000 and a minimum anti-aliasing sample rate of 4.
-- **Benchmark and Optimize**: Aim to achieve the best performance on the **extreme** system, adhering to the **edu_shared** queue's resource limitations. This involves measuring and optimizing the parallel code's execution speed.
-- **Speed-up Challenge**: Compete in a speed-up challenge, submitting the most efficient results to earn extra credit. The base time for the speed-up calculation is **652.51s**, the total time for image generation and writing to disk. Calculate speed-up with the equation:
-$$\text{Speedup} = \frac{\text{Base Time}}{\text{Parallel Time}}$$
-<br>Where:
-    - **Base Time** is 652.51s, the total time for serial execution.
-    **Parallel Time** is the time it takes the parallelized version to generate and write the image to disk.
-- **Final Submission Requirements**:
-    - **Performance Graph**: This graph showcases the speed-up attained with various node counts, maintaining the iteration count at 10,000 and adhering to the anti-aliasing constraints. (_**mandelbrot-speedup.png**_)
-    - **Source Code**: Include the final parallel version that compiles and runs on the **extreme** cluster. (_**mandelbrot-mpi.cc**_ and _**mandelbrot-serial.cc**_)
-    - **Makefile**: Makefile builds _mandelbrot-mpi_ for execution on **extreme** resources, has `make all` and `make clean` where make all builds both mpi and serial versions, make clean removes executables, *.pnm, and *.png files.
-    - **Project Summary**: Detail the MPI parallelization approach, challenges encountered, and insights gained. (_**mandelbrot.txt**_)
-    - **PBS Script**: Provide the PBS script used for job submission as part of the repository. (_**mandelbrot.PBS**_)
+---
+## Quick Start
+```bash
+# 1. Build both the serial and parallel binaries (requires mpic++, OpenMP)
+make           # or: make all
 
-## Extra Credit: Task-Based Parallelism (10 points)
-Explore an advanced parallelization strategy by implementing a manager/worker model that distributes subtasks (sub-rectangles of the image) among worker nodes. 
+# 2. Run the serial reference version
+./mandelbrot-serial -f baseline.pnm
 
-### Requirements:
-- **Separate Implementation**: This task-based solution should be distinct from the serial MPI implementation. (_**mandelbrot-task.cc**_)
-- **Performance Analysis**: Include an additional graph comparing the performance of the task-based solution across 1, 2, 4, and 8 nodes. (_**mandelbrot-task-speedup.png**_)
-- **Approach Description**: Briefly describe the manager/worker model, focusing on allocating and managing tasks across worker processes.
+# 3. Run the hybrid MPI+OpenMP version
+#    Example: 4 MPI ranks, 8 OpenMP threads per rank, 10k iterations, 4×AA
+mpirun -np 4 env OMP_NUM_THREADS=8 ./mandelbrot-mpi -f mandelbrot.pnm -i 10000 -aa 4
 
-## Grading Criteria
-Grades will reflect the effectiveness and efficiency of parallelization efforts, focusing on the speed-up achieved and the innovation in the approach.
+# 4. Convert the output (choose one)
+convert mandelbrot.pnm mandelbrot.png        # ImageMagick
+# or
+pnmtopng mandelbrot.pnm > mandelbrot.png     # Netpbm
+```
+The thread count can be changed at run-time by setting the `OMP_NUM_THREADS` environment variable—no recompilation needed.
 
-## Ethics Statement
-Encourage collaboration for learning, but ensure submissions are individual work. Cite any external sources or collaborators appropriately.
+---
+## Command-line Flags
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-f` | Output filename (`.pnm` will be appended if not present) | `mandelbrot.pnm` |
+| `-i` | Maximum iterations per pixel | `10000` |
+| `-x`, `-y` | Centre of view in the complex plane | `-0.75`, `0.0` |
+| `-z` | Zoom factor (> 1 zooms in) | `1.0` |
+| `-aa` | Anti-aliasing samples per pixel (must be a square number) | `4` |
 
-## Submission Notes
-Ensure the submitted code follows project specifications and semester-long guidelines, including the constant iteration count of 10,000 and the minimum anti-aliasing sample rate of 4. The goal is to optimize performance within these constraints while producing accurate and visually correct Mandelbrot set images.
+---
+## Parallelisation Strategy
+1. **Domain Decomposition (MPI)** – Image rows are block-distributed among ranks to minimise communication.
+2. **Shared-memory Parallelism (OpenMP)** – Each rank performs a `#pragma omp parallel for` over its local rows.
+3. **Collective I/O** – Ranks write directly to a single output file using `MPI_File_write_at`, avoiding a gather bottleneck.
 
-![Performance on Extreme](./mandy-extreme.png)
+---
+## Performance Results (Extreme Cluster, 8 cores / node)
+| Nodes | Runtime (s) | Speed-up (×) |
+|:----:|:-----------:|:------------:|
+| 1 | 12.94 | 50.41 |
+| 2 | 7.40 | 88.15 |
+| 4 | 5.79 | 112.76 |
+| 8 | 3.46 | 188.74 |
+
+<p align="center">
+  <img src="./mandelbrot_performance.png" width="650" alt="Runtime and Speed-up vs. Nodes">
+</p>
+
+---
+## Repository Contents
+| File | Purpose |
+|------|---------|
+| `mandelbrot-serial.cc` | Baseline single-threaded implementation |
+| `mandelbrot-mpi.cc` | Hybrid MPI + OpenMP implementation |
+| `Makefile` | Builds both executables; `make clean` removes binaries & images |
+| `mandelbrot.pbs` | PBS script used to submit jobs on *extreme* |
+| `plot_performance.py` | Generates the performance plot above |
+| `mandelbrot.txt` | In-depth write-up of the parallelisation and results |
+
+---
+## Regenerating the Plot
+```bash
+pip install matplotlib            # once, if needed
+python plot_performance.py        # creates mandelbrot_performance.png
+```
+
+---
+## License & Authorship
+© 2024 Vishal Reddy Vaka.  Released for educational use.
+
+---
+## Acknowledgements
+Thanks to Professor Dr. Michael Papka and the CS department for providing the starter code and access to the *extreme* HPC cluster.

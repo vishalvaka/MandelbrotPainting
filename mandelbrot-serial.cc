@@ -6,6 +6,8 @@
 #include <cstdlib> // Include for standard library functions, like atoi (ASCII to integer) and atof (ASCII to float)
 #include <cmath> // Include for mathematical functions, like sqrt and sin
 #include <string> // Include for using the string class
+#include <chrono>
+using namespace std::chrono;
 
 // Constants defining the output image size and anti-aliasing samples
 const int WIDTH = 1920; // Image width in pixels
@@ -39,6 +41,8 @@ int main(int argc, char* argv[]) {
     std::vector<int> red(WIDTH * HEIGHT);
     std::vector<int> green(WIDTH * HEIGHT);
     std::vector<int> blue(WIDTH * HEIGHT);
+
+    auto start = high_resolution_clock::now();
 
     // Generate the image
     for (int y = 0; y < HEIGHT; ++y) {
@@ -80,6 +84,12 @@ int main(int argc, char* argv[]) {
             imageFile << red[idx] << " " << green[idx] << " " << blue[idx] << "\n";
         }
     }
+
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+
+    std::cout << "Time taken: " << duration.count() << " microseconds" << std::endl;
+    
     // Close the file
     imageFile.close();
 

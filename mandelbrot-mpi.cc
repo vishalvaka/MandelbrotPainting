@@ -69,8 +69,9 @@ int main(int argc, char* argv[]) {
     // endX = (startX + xSegment) < WIDTH ? (startX + xSegment) : WIDTH;
     double startTime = MPI_Wtime();
     // Generate the image
-    
+    std::cout << "number of local processors: " << omp_get_num_procs() << std::endl;
     #pragma omp parallel for
+    
     for (int y = startY; y < endY; ++y) {
         for (int x = 0; x < WIDTH; ++x) {
             // Variables to accumulate color values for anti-aliasing
@@ -135,26 +136,26 @@ int main(int argc, char* argv[]) {
     // MPI_Gather(&red[startY], (endY - startY) * WIDTH, MPI_INT, &red[0], ySegment * WIDTH, MPI_INT, 0, MPI_COMM_WORLD);
     // std::cout << "Calculation done at world rank "<< worldRank << std::endl;
 
-    if (worldRank != 0) {
-        MPI_Send(&red[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
-        MPI_Send(&green[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
-        MPI_Send(&blue[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
-        // std::cout << "Send done at world rank " << worldRank << std::endl;
-    }
+    // if (worldRank != 0) {
+    //     MPI_Send(&red[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    //     MPI_Send(&green[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    //     MPI_Send(&blue[startY * WIDTH], (endY - startY) * WIDTH, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    //     // std::cout << "Send done at world rank " << worldRank << std::endl;
+    // }
 
-    // MPI_Barrier(MPI_COMM_WORLD);
+    // // MPI_Barrier(MPI_COMM_WORLD);
 
-    else {
-        for (int i = 1; i < worldSize; i++) {
-            MPI_Status status;
-            int currStart = i * ySegment * WIDTH;
-            int currEnd = (currStart + ySegment) < HEIGHT ? (currStart + ySegment * WIDTH) : HEIGHT * WIDTH;
-            MPI_Recv(&red[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&green[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&blue[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
-            // std::cout << "Recv done at world rank " << i << std::endl;
-        }
-    }
+    // else {
+    //     for (int i = 1; i < worldSize; i++) {
+    //         MPI_Status status;
+    //         int currStart = i * ySegment * WIDTH;
+    //         int currEnd = (currStart + ySegment) < HEIGHT ? (currStart + ySegment * WIDTH) : HEIGHT * WIDTH;
+    //         MPI_Recv(&red[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+    //         MPI_Recv(&green[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+    //         MPI_Recv(&blue[currStart], (currEnd - currStart), MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+    //         // std::cout << "Recv done at world rank " << i << std::endl;
+    //     }
+    // }
 
     // MPI_Barrier(MPI_COMM_WORLD);
 
@@ -194,27 +195,35 @@ int main(int argc, char* argv[]) {
     //     }
     // }
     // Open the output file
-    if (worldRank == 0)
-    {    
-        std::ofstream imageFile(filename);
-        std::ostringstream oss;
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
 
-        // Write the PNM file header to the buffer
-        oss << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
-
-        // Write the pixel data to the buffer
-        for (int y = 0; y < HEIGHT; ++y) {
-            for (int x = 0; x < WIDTH; ++x) {
-                int idx = y * WIDTH + x;
-                oss << red[idx] << " " << green[idx] << " " << blue[idx] << "\n";
-            }
-        }
-
-        // Write the buffered data to the file in one go
-        imageFile << oss.str();
-        // Close the file
-        imageFile.close();
+    // Write header only from the first process
+    if (worldRank == 0) {
+        std::ostringstream header;
+        header << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
+        MPI_File_write_at(fh, 0, header.str().c_str(), header.str().size(), MPI_CHAR, MPI_STATUS_IGNORE);
     }
+
+    // Compute the offset where this process will start writing its data
+    MPI_Offset offset = worldRank * (endY - startY) * WIDTH * 12 + (worldRank == 0 ? 15 : 0);
+    if (worldRank == 0) offset += 15;  // Offset for the header
+
+    // Create a buffer for this process's output
+    std::ostringstream oss;
+    for (int y = startY; y < endY; ++y) {
+        for (int x = 0; x < WIDTH; ++x) {
+            int idx = (y - startY) * WIDTH + x;
+            oss << red[idx] << " " << green[idx] << " " << blue[idx] << "\n";
+        }
+    }
+
+    // Write to the file at the calculated offset
+    std::string data = oss.str();
+    MPI_File_write_at(fh, offset, data.c_str(), data.size(), MPI_CHAR, MPI_STATUS_IGNORE);
+
+    // Close the file
+    MPI_File_close(&fh);
     if (worldRank == 0)
         std::cout << "time taken: " << MPI_Wtime() - startTime << std::endl;
     MPI_Finalize();
